@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>识渊工作台 - 随身备考空间</title>
+    <!-- 引入 Tailwind CSS 用于界面美化 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            -webkit-tap-highlight-color: transparent; /* 消除移动端点击高亮 */
+        }
+        /* 隐藏滚动条但保留滚动功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col pb-24 md:pb-0">
+
+    <!-- 1. PC端顶部导航栏 (在移动端隐藏) -->
+    <header class="bg-slate-900 text-white shadow-md hidden md:block">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl font-bold tracking-wider text-blue-400">识渊工作台</span>
+                <span class="bg-blue-900 text-blue-200 text-xs px-2 py-1 rounded">v1.2 每日金句版</span>
+            </div>
+            <nav class="flex space-x-1" id="pc-nav-tabs">
+                <button onclick="switchTab('dashboard')" id="pc-btn-dashboard" class="px-4 py-2 rounded-md bg-blue-600 text-white font-medium transition text-sm">仪表盘</button>
+                <button onclick="switchTab('quotes')" id="pc-btn-quotes" class="px-4 py-2 rounded-md hover:bg-slate-800 text-slate-300 transition text-sm">我的金句</button>
+                <button onclick="switchTab('mistakes')" id="pc-btn-mistakes" class="px-4 py-2 rounded-md hover:bg-slate-800 text-slate-300 transition text-sm">错题管理</button>
+                <button onclick="switchTab('bank')" id="pc-btn-bank" class="px-4 py-2 rounded-md hover:bg-slate-800 text-slate-300 transition text-sm">智能题库</button>
+                <button onclick="switchTab('capture')" id="pc-btn-capture" class="px-4 py-2 rounded-md hover:bg-slate-800 text-slate-300 transition text-sm">采集记录</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 2. 移动端底部悬浮导航栏 (在PC端隐藏) -->
+    <div class="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2.5 z-40 shadow-lg">
+        <button onclick="switchTab('dashboard')" id="m-btn-dashboard" class="flex flex-col items-center space-y-1 text-blue-600">
+            <span class="text-xl">📊</span>
+            <span class="text-[10px] font-medium">仪表盘</span>
+        </button>
+        <button onclick="switchTab('quotes')" id="m-btn-quotes" class="flex flex-col items-center space-y-1 text-slate-400">
+            <span class="text-xl">✍️</span>
+            <span class="text-[10px] font-medium">我的金句</span>
+        </button>
+        <button onclick="switchTab('capture')" id="m-btn-capture-center" class="flex flex-col items-center justify-center -mt-6 bg-blue-600 text-white w-12 h-12 rounded-full shadow-lg border-4 border-white active:scale-95 transition">
+            <span class="text-xl">📷</span>
+        </button>
+        <button onclick="switchTab('mistakes')" id="m-btn-mistakes" class="flex flex-col items-center space-y-1 text-slate-400">
+            <span class="text-xl">❌</span>
+            <span class="text-[10px] font-medium">错题本</span>
+        </button>
+        <button onclick="switchTab('bank')" id="m-btn-bank" class="flex flex-col items-center space-y-1 text-slate-400">
+            <span class="text-xl">📚</span>
+            <span class="text-[10px] font-medium">题库</span>
+        </button>
+    </div>
+
+    <!-- 主体内容区 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
+        
+        <!-- 1. 仪表盘模块 -->
+        <section id="tab-dashboard" class="space-y-5">
+            
+            <!-- 🌟 新增：每日推荐金句 (每日自动轮换) -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">🌟</span>
+                        <h4 class="text-sm font-bold text-slate-800">今日推荐背诵金句</h4>
+                    </div>
+                    <span id="daily-theme" class="text-[10px] bg-amber-50 text-amber-600 font-bold px-2 py-0.5 rounded-full">加载中...</span>
+                </div>
+                
+                <!-- 暗记遮挡区域 -->
+                <div class="bg-slate-50 p-4 rounded-xl min-h-[4rem] flex flex-col items-center justify-center relative overflow-hidden border border-slate-100">
+                    <p id="daily-content" class="text-slate-800 text-sm font-medium text-center blur-md transition-all duration-300 pointer-events-none leading-relaxed">加载中...</p>
+                    <button id="daily-mask-btn" onclick="revealDaily()" class="absolute inset-0 bg-slate-200/80 text-slate-600 text-xs font-semibold flex items-center justify-center hover:bg-slate-200/90 transition">
+                        👁️ 遮挡防看 · 点击显影
+                    </button>
+                </div>
+                
+                <div class="flex justify-between items-center text-xs text-slate-400 pt-1">
+                    <span id="daily-source">出处: 加载中...</span>
+                    <!-- 快速收藏到我的金句库 -->
+                    <button id="daily-collect-btn" onclick="collectDaily()" class="text-blue-600 font-semibold hover:text-blue-800 flex items-center space-x-0.5">
+                        <span>⭐ 收藏到背诵本</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 随手记 / 闪念胶囊 -->
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 rounded-2xl shadow-sm space-y-3">
+                <div class="flex justify-between items-center">
+                    <h4 class="text-base font-bold">💡 随考随记（闪念胶囊）</h4>
+                    <span class="text-xs bg-white/20 px-2 py-0.5 rounded-full">路途灵感</span>
+                </div>
+                <p class="text-xs text-blue-100">在路上偶然看到的好句子？点击下方按钮立即随手保存。</p>
+                <div class="flex space-x-2 pt-1">
+                    <button onclick="switchTab('capture')" class="flex-1 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold py-2.5 rounded-lg transition flex items-center justify-center space-x-1">
+                        <span>📷 拍笔记/试卷</span>
+                    </button>
+                    <button onclick="openModal('quote-modal')" class="flex-1 bg-white text-blue-600 text-xs font-semibold py-2.5 rounded-lg hover:bg-blue-50 transition flex items-center justify-center space-x-1">
+                        <span>📝 写个金句</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 数据看板（网格布局适配小屏） -->
+            <div class="grid grid-cols-3 gap-3">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center">
+                    <span class="text-lg">✍️</span>
+                    <p class="text-[10px] text-slate-400 font-medium mt-1">金句</p>
+                    <h3 class="text-lg font-bold text-slate-800 mt-0.5" id="stat-quotes">0</h3>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center">
+                    <span class="text-lg">❌</span>
+                    <p class="text-[10px] text-slate-400 font-medium mt-1">错题</p>
+                    <h3 class="text-lg font-bold text-slate-800 mt-0.5" id="stat-mistakes">0</h3>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center">
+                    <span class="text-lg">📚</span>
+                    <p class="text-[10px] text-slate-400 font-medium mt-1">题库</p>
+                    <h3 class="text-lg font-bold text-slate-800 mt-0.5" id="stat-questions">0</h3>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 金句背诵模块 -->
+        <section id="tab-quotes" class="hidden space-y-5">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-bold text-slate-800">✍️ 我的金句库</h2>
+                <button onclick="openModal('quote-modal')" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition text-xs font-medium">+ 新增</button>
+            </div>
+            
+            <!-- 卡片背诵区域 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="quotes-container">
+                <!-- 动态渲染 -->
+            </div>
+        </section>
+
+        <!-- 3. 错题管理模块 -->
+        <section id="tab-mistakes" class="hidden space-y-4">
+            <div class="flex justify-between items-center gap-2">
+                <h2 class="text-lg font-bold text-slate-800">❌ 行测错题本</h2>
+                <button onclick="openModal('mistake-modal')" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition text-xs font-medium shrink-0">+ 新增</button>
+            </div>
+            <div>
+                <input type="text" id="search-mistake-input" oninput="renderMistakes()" placeholder="搜索错题关键字..." class="w-full px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div class="space-y-4" id="mistakes-container">
+                <!-- 动态渲染 -->
+            </div>
+        </section>
+
+        <!-- 5. 智能题库模块 (这里把它的tab和导航按钮做了对齐) -->
+        <section id="tab-bank" class="hidden space-y-5">
+            <h2 class="text-lg font-bold text-slate-800">📚 智能本地题库</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <!-- 题库导入 -->
+                <div class="bg-white p-5 rounded-xl border border-slate-100 space-y-3 h-fit">
+                    <h3 class="font-bold text-sm text-slate-700">录入/导入真题</h3>
+                    <div>
+                        <textarea id="bank-input-question" rows="3" placeholder="请输入题目内容..." class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+                    <div>
+                        <textarea id="bank-input-answer" rows="2" placeholder="解析与答案..." class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+                    <button onclick="addBankQuestion()" class="w-full bg-blue-600 text-white py-2 rounded-lg text-xs hover:bg-blue-700 transition">保存入库</button>
+                </div>
+
+                <!-- 题库检索 -->
+                <div class="md:col-span-2 bg-white p-5 rounded-xl border border-slate-100 space-y-3">
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="search-bank-input" placeholder="输入关键字搜索题库..." class="flex-grow px-3 py-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        <button onclick="searchBank()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-xs hover:bg-slate-900 transition">检索</button>
+                    </div>
+                    <div id="bank-results" class="space-y-3">
+                        <p class="text-xs text-slate-400 text-center py-6">暂无检索结果。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. 手写笔记智能采集 -->
+        <section id="tab-capture" class="hidden space-y-5">
+            <h2 class="text-lg font-bold text-slate-800">📷 采集记录与 OCR</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <!-- 拍照/上传区 -->
+                <div class="bg-white p-5 rounded-xl border border-slate-100 space-y-3 text-center">
+                    <h3 class="font-bold text-xs text-slate-700 text-left">第一步：采集方式选择</h3>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <!-- 相机直拍按钮 (利用 capture="environment" 直调后置摄像头) -->
+                        <button onclick="triggerCamera()" class="flex flex-col items-center justify-center p-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 active:scale-95 transition">
+                            <span class="text-2xl mb-1">📸</span>
+                            <span class="text-xs font-bold text-blue-700">相机直拍</span>
+                            <span class="text-[9px] text-blue-400 mt-0.5">直接拍照上传</span>
+                        </button>
+                        <!-- 相册/文件上传 -->
+                        <button onclick="triggerFileSelect()" class="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 active:scale-95 transition">
+                            <span class="text-2xl mb-1">🖼️</span>
+                            <span class="text-xs font-bold text-slate-700">相册选取</span>
+                            <span class="text-[9px] text-slate-400 mt-0.5">选择历史图片</span>
+                        </button>
+                    </div>
+
+                    <!-- 隐藏的 input 用于控制相机和文件 -->
+                    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageUpload(event)">
+                    <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+
+                    <!-- 图片预览区 -->
+                    <div id="image-preview-container" class="hidden pt-2 border-t mt-3">
+                        <p class="text-[10px] text-slate-400 text-left mb-1">已捕获预览图：</p>
+                        <img id="image-preview" src="" class="max-h-40 rounded-lg border mx-auto">
+                    </div>
+                </div>
+
+                <!-- 结果预览及微调 -->
+                <div class="bg-white p-5 rounded-xl border border-slate-100 space-y-3">
+                    <h3 class="font-bold text-xs text-slate-700">第二步：AI 分类与微调</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">识别出的文本（可直接修改）</label>
+                            <textarea id="ocr-text-result" rows="4" placeholder="等待拍摄或上传图片..." class="w-full p-2 border rounded-lg text-xs bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">AI 推荐分类</label>
+                            <select id="ocr-category" class="w-full p-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="quotes">申论金句</option>
+                                <option value="mistakes">行测错题</option>
+                            </select>
+                        </div>
+                        <button onclick="saveOcrResult()" id="btn-save-ocr" disabled class="w-full bg-slate-300 text-white py-2 rounded-lg text-xs cursor-not-allowed transition">保存归档</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 弹窗：新增金句 -->
+    <div id="quote-modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div class="bg-white rounded-t-2xl sm:rounded-2xl shadow-lg max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-base font-bold text-slate-800">录入新金句</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-[10px] text-slate-400 mb-1">金句内容</label>
+                    <textarea id="input-quote-content" rows="3" placeholder="例如：治国有常，而利民为本..." class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">适用主题</label>
+                        <input type="text" id="input-quote-theme" placeholder="如：乡村振兴" class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">来源出处</label>
+                        <input type="text" id="input-quote-source" placeholder="如：人民网" class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeModal('quote-modal')" class="flex-1 sm:flex-none px-4 py-2 border rounded-lg text-xs hover:bg-slate-100 transition">取消</button>
+                <button onclick="addQuote()" class="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 transition">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：新增错题 -->
+    <div id="mistake-modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div class="bg-white rounded-t-2xl sm:rounded-2xl shadow-lg max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-base font-bold text-slate-800">录入行测错题</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-[10px] text-slate-400 mb-1">错题分类</label>
+                    <select id="input-mistake-category" class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="行测-数量关系">行测-数量关系</option>
+                        <option value="行测-言语理解">行测-言语理解</option>
+                        <option value="行测-资料分析">行测-资料分析</option>
+                        <option value="行测-判断推理">行测-判断推理</option>
+                        <option value="行测-常识判断">行测-常识判断</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] text-slate-400 mb-1">题目与选项</label>
+                    <textarea id="input-mistake-title" rows="3" placeholder="请输入题目详细信息..." class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">您的错误答案</label>
+                        <input type="text" id="input-mistake-user" placeholder="如：A" class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">正确参考答案</label>
+                        <input type="text" id="input-mistake-correct" placeholder="如：C" class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] text-slate-400 mb-1">题目解析与反思</label>
+                    <textarea id="input-mistake-analysis" rows="2" placeholder="写下考点公式或者易错点反思..." class="w-full p-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeModal('mistake-modal')" class="flex-1 sm:flex-none px-4 py-2 border rounded-lg text-xs hover:bg-slate-100 transition">取消</button>
+                <button onclick="addMistake()" class="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 transition">保存错题</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部垫高层（仅移动端，防止内容被底部悬浮导航遮挡） -->
+    <div class="h-16 md:hidden"></div>
+
+    <script>
+        // --- 每日备考高分金句池 ---
+        const dailyQuotesPool = [
+            { content: "人不负青山，青山定不负人。绿色发展不仅是时代潮流，更是高质量发展的底色。", theme: "绿色生态/高质量发展", source: "官方高频金句" },
+            { content: "抓创新就是抓发展，谋创新就是谋未来。要把科技自立自强作为国家发展的战略支撑。", theme: "科技创新/战略支撑", source: "科技创新论述" },
+            { content: "一代人有一代人的长征，一代人有一代人的担当。青年干部当躬行实践，走好新时代考路。", theme: "青年担当/理想信念", source: "人民日报社论" },
+            { content: "文化是一个国家、一个民族的灵魂。文化兴国运兴，文化强民族强。", theme: "文化自信/精神文明", source: "文化建设主旨" },
+            { content: "改革开放是决定当代中国命运的关键一招。唯有改革不停顿，开放不止步，方能开辟新局。", theme: "改革破局/开拓创新", source: "发展改革论述" },
+            { content: "治国有常，而利民为本。要把群众的“表情包”作为检验民生工作成效的“风向标”。", theme: "以人为本/厚植民生", source: "民生调研论述" },
+            { content: "大道至简，实干为要。空谈误国，实干兴邦，把宏伟蓝图变为美好现实的关键在‘落实’。", theme: "实干作风/知行合一", source: "组织建设语录" },
+            { content: "千磨万击还坚劲，任尔东西南北风。面对风浪风险，唯有坚定定力、迎难而上，方能破浪前行。", theme: "历史定力/艰苦奋斗", source: "奋斗精神金句" },
+            { content: "小康不小康，关键看老乡。乡村全面振兴的关键，在于人才回流与产业兴旺的‘双向奔赴’。", theme: "乡村振兴/基层治理", source: "基层建设论述" },
+            { content: "浩渺行无极，扬帆但信风。以开放之姿拥抱世界，方能汇聚高质量发展的澎湃动能。", theme: "大国胸怀/开放合作", source: "外交与宏观经济" }
+        ];
+
+        // 默认保存在“我的金句本”里的数据（初始化用）
+        const defaultQuotes = [
+            { id: 1, content: "治国有常，而利民为本。", theme: "民生/基础建设", source: "《韩非子·备内》" },
+            { id: 2, content: "大鹏一日同风起，扶摇直上九万里。", theme: "青年担当/创新", source: "李白" }
+        ];
+
+        const defaultMistakes = [
+            {
+                id: 1,
+                category: "行测-数量关系",
+                title: "甲、乙两人在环形跑道上跑步，跑道全长400米。甲的速度是6米/秒，乙的速度是4米/秒。两人同时同地同向出发，甲第一次追上乙需要多少秒？",
+                userAnswer: "100秒",
+                correctAnswer: "200秒",
+                analysis: "追及路程差 = 速度差 × 追及时间。400 = (6 - 4) * t，解得 t = 200秒。"
+            }
+        ];
+
+        const defaultBank = [
+            { id: 1, question: "2024年中央一号文件指出，要学习运用“千万工程”经验，有力有效推进乡村全面振兴。", answer: "乡村全面振兴" }
+        ];
+
+        let quotes = JSON.parse(localStorage.getItem('sy_quotes_v1.2')) || defaultQuotes;
+        let mistakes = JSON.parse(localStorage.getItem('sy_mistakes_v1.2')) || defaultMistakes;
+        let bank = JSON.parse(localStorage.getItem('sy_bank_v1.2')) || defaultBank;
+
+        function saveData() {
+            localStorage.setItem('sy_quotes_v1.2', JSON.stringify(quotes));
+            localStorage.setItem('sy_mistakes_v1.2', JSON.stringify(mistakes));
+            localStorage.setItem('sy_bank_v1.2', JSON.stringify(bank));
+            updateStats();
+        }
+
+        // --- 核心：基于日期哈希自动更新每日推荐金句 ---
+        let currentDailyQuote = null;
+
+        function getDailyQuote() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth() + 1;
+            const day = today.getDate();
+            const dateStr = `${year}-${month}-${day}`; // 如 "2026-7-29"
+
+            // 简单哈希算法，保证同一天生成的索引绝对一致，日期变更时索引改变
+            let hash = 0;
+            for (let i = 0; i < dateStr.length; i++) {
+                hash = dateStr.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const index = Math.abs(hash) % dailyQuotesPool.length;
+            return dailyQuotesPool[index];
+        }
+
+        function initDailyQuote() {
+            currentDailyQuote = getDailyQuote();
+            document.getElementById('daily-theme').innerText = currentDailyQuote.theme;
+            document.getElementById('daily-content').innerText = currentDailyQuote.content;
+            document.getElementById('daily-source').innerText = `出处: ${currentDailyQuote.source}`;
+
+            // 检查今日金句是否已经被收藏
+            const isAlreadyCollected = quotes.some(q => q.content === currentDailyQuote.content);
+            const collectBtn = document.getElementById('daily-collect-btn');
+            if (isAlreadyCollected) {
+                collectBtn.innerHTML = `<span>✅ 已收藏至背诵本</span>`;
+                collectBtn.disabled = true;
+                collectBtn.className = "text-slate-400 cursor-not-allowed text-xs";
+            } else {
+                collectBtn.innerHTML = `<span>⭐ 收藏到背诵本</span>`;
+                collectBtn.disabled = false;
+                collectBtn.className = "text-blue-600 font-semibold hover:text-blue-800 text-xs";
+            }
+        }
+
+        // 每日金句显影切换
+        function revealDaily() {
+            const text = document.getElementById('daily-content');
+            const btn = document.getElementById('daily-mask-btn');
+            if (text.classList.contains('blur-md')) {
+                text.classList.remove('blur-md');
+                btn.className = "absolute bottom-1 right-2 bg-slate-800/80 text-white rounded px-1.5 py-0.5 text-[8px] transition";
+                btn.innerText = "重新遮罩";
+            } else {
+                text.classList.add('blur-md');
+                btn.className = "absolute inset-0 bg-slate-200/80 text-slate-600 text-xs font-semibold flex items-center justify-center hover:bg-slate-200/90 transition";
+                btn.innerText = "👁️ 遮挡防看 · 点击显影";
+            }
+        }
+
+        // 收藏今日金句
+        function collectDaily() {
+            if (!currentDailyQuote) return;
+            const isAlreadyCollected = quotes.some(q => q.content === currentDailyQuote.content);
+            if (isAlreadyCollected) return;
+
+            quotes.push({
+                id: Date.now(),
+                content: currentDailyQuote.content,
+                theme: currentDailyQuote.theme,
+                source: currentDailyQuote.source
+            });
+            saveData();
+            initDailyQuote(); // 刷新收藏按钮状态
+            alert('已成功收藏至您的金句库，可在“我的金句”模块进行长期复习！');
+        }
+
+        // 双端导航逻辑
+        function switchTab(tabId) {
+            const sections = ['dashboard', 'quotes', 'mistakes', 'bank', 'capture'];
+            sections.forEach(s => {
+                document.getElementById(`tab-${s}`).classList.add('hidden');
+                document.getElementById(`pc-btn-${s}`).className = "px-4 py-2 rounded-md hover:bg-slate-800 text-slate-300 transition text-sm";
+                if (s !== 'capture') {
+                    document.getElementById(`m-btn-${s}`).className = "flex flex-col items-center space-y-1 text-slate-400";
+                }
+            });
+
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            document.getElementById(`pc-btn-${tabId}`).className = "px-4 py-2 rounded-md bg-blue-600 text-white font-medium transition text-sm";
+            if (tabId !== 'capture') {
+                document.getElementById(`m-btn-${tabId}`).className = "flex flex-col items-center space-y-1 text-blue-600";
+            }
+
+            if (tabId === 'quotes') renderQuotes();
+            if (tabId === 'mistakes') renderMistakes();
+        }
+
+        function updateStats() {
+            document.getElementById('stat-quotes').innerText = quotes.length;
+            document.getElementById('stat-mistakes').innerText = mistakes.length;
+            document.getElementById('stat-questions').innerText = bank.length;
+        }
+
+        // 弹窗控制
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        /* --- 相机与上传控制逻辑 --- */
+        function triggerCamera() {
+            document.getElementById('camera-input').click();
+        }
+
+        function triggerFileSelect() {
+            document.getElementById('gallery-input').click();
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('image-preview').src = e.target.result;
+                document.getElementById('image-preview-container').classList.remove('hidden');
+                simulateOcr();
+            }
+            reader.readAsDataURL(file);
+        }
+
+        // 模拟 OCR 服务与分类器
+        function simulateOcr() {
+            const ocrResultTextarea = document.getElementById('ocr-text-result');
+            const categorySelect = document.getElementById('ocr-category');
+            const saveBtn = document.getElementById('btn-save-ocr');
+
+            ocrResultTextarea.value = "正在启动识渊轻量级 OCR 进行快速校对识别...";
+            saveBtn.disabled = true;
+
+            setTimeout(() => {
+                const mockOcrList = [
+                    {
+                        text: "【随手记/金句】\n“新质生产力”本身就是绿色生产力。推动经济社会发展绿色化、低碳化是实现高质量发展的关键环节。",
+                        category: "quotes"
+                    },
+                    {
+                        text: "【错题反思/常识】\n“自强不息，厚德载物”出自《易经》。其中“自强不息”指的是君子应刚毅坚卓、奋发图强；“厚德载物”指接物度量之大。",
+                        category: "mistakes"
+                    }
+                ];
+                
+                const selected = mockOcrList[Math.floor(Math.random() * mockOcrList.length)];
+                ocrResultTextarea.value = selected.text;
+                categorySelect.value = selected.category;
+                
+                saveBtn.disabled = false;
+                saveBtn.className = "w-full bg-blue-600 text-white py-2 rounded-lg text-xs hover:bg-blue-700 transition cursor-pointer";
+            }, 1200);
+        }
+
+        function saveOcrResult() {
+            const content = document.getElementById('ocr-text-result').value;
+            const category = document.getElementById('ocr-category').value;
+
+            if (category === 'quotes') {
+                quotes.push({
+                    id: Date.now(),
+                    content: content,
+                    theme: "AI自动分类",
+                    source: "随手抓拍"
+                });
+                alert('已保存至【我的金句】模块！');
+            } else {
+                mistakes.push({
+                    id: Date.now(),
+                    category: "行测-常识判断",
+                    title: content,
+                    userAnswer: "未填",
+                    correctAnswer: "重点常识归档",
+                    analysis: "随手拍摄OCR智能保存记录"
+                });
+                alert('已保存至【行测错题本-常识】模块！');
+            }
+
+            saveData();
+            document.getElementById('image-preview-container').classList.add('hidden');
+            document.getElementById('ocr-text-result').value = '';
+            document.getElementById('btn-save-ocr').disabled = true;
+            document.getElementById('btn-save-ocr').className = "w-full bg-slate-300 text-white py-2 rounded-lg text-xs cursor-not-allowed transition";
+            switchTab('dashboard');
+        }
+
+        /* --- 列表渲染逻辑 (金句和错题) --- */
+        function renderQuotes() {
+            const container = document.getElementById('quotes-container');
+            container.innerHTML = '';
+            quotes.forEach((q, index) => {
+                container.innerHTML += `
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between space-y-3">
+                        <div>
+                            <span class="bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-full font-semibold">${q.theme}</span>
+                            <div class="mt-3 min-h-[3.5rem] flex items-center justify-center bg-slate-50 rounded-lg p-3 relative overflow-hidden">
+                                <p id="quote-text-${index}" class="text-slate-800 text-xs font-medium text-center blur-sm transition-all duration-300 pointer-events-none leading-relaxed">${q.content}</p>
+                                <button id="mask-btn-${index}" onclick="revealQuote(${index})" class="absolute inset-0 bg-slate-200/85 text-slate-600 text-xs font-semibold flex items-center justify-center">
+                                    👁️ 遮挡背诵·点击显影
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center pt-2 border-t border-slate-100 text-[10px] text-slate-400">
+                            <span>出处: ${q.source}</span>
+                            <button onclick="deleteQuote(${q.id})" class="text-red-500 font-semibold">删除</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function revealQuote(index) {
+            const text = document.getElementById(`quote-text-${index}`);
+            const btn = document.getElementById(`mask-btn-${index}`);
+            if (text.classList.contains('blur-sm')) {
+                text.classList.remove('blur-sm');
+                btn.className = "absolute bottom-1 right-1 bg-slate-800/80 text-white rounded px-1.5 py-0.5 text-[8px]";
+                btn.innerText = "重新遮罩";
+            } else {
+                text.classList.add('blur-sm');
+                btn.className = "absolute inset-0 bg-slate-200/85 text-slate-600 text-xs font-semibold flex items-center justify-center";
+                btn.innerText = "👁️ 遮挡背诵·点击显影";
+            }
+        }
+
+        function addQuote() {
+            const content = document.getElementById('input-quote-content').value.trim();
+            const theme = document.getElementById('input-quote-theme').value.trim() || '通用';
+            const source = document.getElementById('input-quote-source').value.trim() || '随记';
+
+            if (!content) return alert('请输入内容！');
+            quotes.push({ id: Date.now(), content, theme, source });
+            saveData();
+            closeModal('quote-modal');
+            renderQuotes();
+        }
+
+        function deleteQuote(id) {
+            if(confirm("确定要删除这条金句吗？")) {
+                quotes = quotes.filter(q => q.id !== id);
+                saveData();
+                renderQuotes();
+            }
+        }
+
+        function renderMistakes() {
+            const searchVal = document.getElementById('search-mistake-input').value.toLowerCase();
+            const container = document.getElementById('mistakes-container');
+            container.innerHTML = '';
+            
+            const filtered = mistakes.filter(m => m.title.toLowerCase().includes(searchVal) || m.analysis.toLowerCase().includes(searchVal));
+
+            if(filtered.length === 0) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-8 text-xs">没有找到错题记录。</p>`;
+                return;
+            }
+
+            filtered.forEach(m => {
+                container.innerHTML += `
+                    <div class="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
+                        <div class="bg-slate-50 px-4 py-2.5 flex justify-between items-center border-b">
+                            <span class="bg-red-50 text-red-600 text-[10px] px-2 py-0.5 rounded font-semibold">${m.category}</span>
+                            <button onclick="deleteMistake(${m.id})" class="text-[10px] text-red-500 font-semibold">删除</button>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <p class="text-xs text-slate-800 font-semibold whitespace-pre-line leading-relaxed">${m.title}</p>
+                            <div class="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded-lg">
+                                <div class="text-red-600"><span class="font-bold">❌ 错：</span>${m.userAnswer}</div>
+                                <div class="text-emerald-600"><span class="font-bold">✅ 对：</span>${m.correctAnswer}</div>
+                            </div>
+                            <details class="group border border-slate-100 rounded-lg">
+                                <summary class="flex justify-between items-center p-2.5 cursor-pointer text-xs text-slate-500 font-medium bg-slate-50/50">
+                                    <span>💡 深度解析</span>
+                                    <span class="transition group-open:-rotate-180">▼</span>
+                                </summary>
+                                <div class="p-3 border-t border-slate-100 text-xs text-slate-600 leading-relaxed bg-white whitespace-pre-line">
+                                    ${m.analysis}
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function addMistake() {
+            const category = document.getElementById('input-mistake-category').value;
+            const title = document.getElementById('input-mistake-title').value.trim();
+            const userAnswer = document.getElementById('input-mistake-user').value.trim() || '未填';
+            const correctAnswer = document.getElementById('input-mistake-correct').value.trim();
+            const analysis = document.getElementById('input-mistake-analysis').value.trim();
+
+            if (!title || !correctAnswer) return alert('请输入题目内容与正确答案！');
+
+            mistakes.push({ id: Date.now(), category, title, userAnswer, correctAnswer, analysis });
+            saveData();
+            closeModal('mistake-modal');
+            renderMistakes();
+        }
+
+        function deleteMistake(id) {
+            if(confirm("确定要删除吗？")) {
+                mistakes = mistakes.filter(m => m.id !== id);
+                saveData();
+                renderMistakes();
+            }
+        }
+
+        /* --- 题库系统逻辑 --- */
+        function addBankQuestion() {
+            const question = document.getElementById('bank-input-question').value.trim();
+            const answer = document.getElementById('bank-input-answer').value.trim();
+
+            if (!question) return alert('请输入题目内容！');
+
+            bank.push({ id: Date.now(), question, answer });
+            saveData();
+            
+            document.getElementById('bank-input-question').value = '';
+            document.getElementById('bank-input-answer').value = '';
+            alert('真题已保存入库！');
+        }
+
+        function searchBank() {
+            const keyword = document.getElementById('search-bank-input').value.toLowerCase().trim();
+            const resultsContainer = document.getElementById('bank-results');
+            resultsContainer.innerHTML = '';
+
+            if(!keyword) {
+                resultsContainer.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">请输入关键字。</p>';
+                return;
+            }
+
+            const results = bank.filter(q => q.question.toLowerCase().includes(keyword) || q.answer.toLowerCase().includes(keyword));
+
+            if (results.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="text-center py-4 space-y-3">
+                        <p class="text-xs text-slate-400">🔍 本地暂未搜到相关考点题目...</p>
+                        <div class="p-3 bg-blue-50/50 rounded-lg text-left inline-block w-full border border-blue-100">
+                            <span class="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold">AI 联想变式模拟题</span>
+                            <p class="text-xs text-slate-800 mt-2 font-semibold">【模拟题】下列关于推进“${keyword}”的实践做法，符合科学规律的是？</p>
+                            <p class="text-[10px] text-slate-500 mt-1">A. 大刀阔斧，千村一面<br>B. 结合本地优势，因地制宜、循序渐进发展</p>
+                            <p class="text-[10px] text-emerald-700 mt-1.5 font-bold">参考答案：B。</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            results.forEach(r => {
+                resultsContainer.innerHTML += `
+                    <div class="p-3 border rounded-lg bg-slate-50 space-y-2">
+                        <p class="text-xs font-semibold text-slate-800 whitespace-pre-line">${r.question}</p>
+                        <p class="text-[10px] text-slate-500 whitespace-pre-line bg-white p-2.5 rounded border"><span class="font-bold text-emerald-600">真题解析：</span>${r.answer}</p>
+                    </div>
+                `;
+            });
+        }
+
+        // 页面首次加载初始化
+        window.onload = function() {
+            updateStats();
+            initDailyQuote(); // 初始化每日金句推荐
+        };
+    </script>
+</body>
+</html>
