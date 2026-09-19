@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>兔子吃月饼</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23f7d774'/%3E%3Ccircle cx='11' cy='12' r='3' fill='%23e0b84a'/%3E%3Ccircle cx='20' cy='19' r='4' fill='%23e0b84a'/%3E%3C/svg%3E">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    background: radial-gradient(1200px 800px at 50% 20%, #1b2350 0%, #0d1130 60%, #070a1e 100%);
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #wrap {
+    text-align: center;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #game {
+    display: block;
+    /* 横竖屏都尽量撑满：取视口宽、高与原始 800 的最小值，保持正方形等比 */
+    width: min(96vw, 96vh, 800px);
+    height: min(96vw, 96vh, 800px);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08);
+    background: #0d1130;
+    touch-action: none;
+  }
+  #hint {
+    color: #8a93c9; font-size: 13px; margin-top: 10px; letter-spacing: 1px;
+    padding: 0 12px;
+  }
+  /* 手机竖屏：画布占满宽度，提示文字加大、可换行 */
+  @media (max-width: 600px) {
+    #game { width: min(96vw, 96vh); height: min(96vw, 96vh); border-radius: 10px; }
+    #hint { font-size: 12px; line-height: 1.6; margin-top: 12px; }
+  }
+  /* 手机横屏：优先撑满高度 */
+  @media (max-height: 500px) and (orientation: landscape) {
+    #game { width: min(94vh, 96vw); height: min(94vh, 96vw); }
+    #hint { display: none; }
+  }
+
+  /* ===== Coze Web SDK 智能助手悬浮窗 ===== */
+  #coze-toggle {
+    position: fixed; right: 18px; bottom: 18px; z-index: 50;
+    padding: 12px 20px; border: none; border-radius: 999px;
+    background: linear-gradient(135deg, #f6c945, #e89b2c);
+    color: #3a2400; font: bold 15px "Microsoft YaHei", sans-serif;
+    cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  #coze-toggle:active { transform: scale(.96); }
+  #coze-panel {
+    position: fixed; right: 18px; bottom: 74px; z-index: 49;
+    width: 380px; height: min(560px, calc(100vh - 110px));
+    display: none; border-radius: 14px; overflow: hidden;
+    background: #fff; border: 1px solid rgba(255,255,255,.18);
+    box-shadow: 0 20px 60px rgba(0,0,0,.55);
+  }
+  #coze-panel.open { display: block; }
+  #coze-panel iframe { width: 100%; height: 100%; border: 0; display: block; }
+  /* 手机竖屏：助手面板全屏 */
+  @media (max-width: 600px) {
+    #coze-panel { right: 0; bottom: 0; width: 100vw; height: 100vh; border-radius: 0; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="800" height="800"></canvas>
+  <div id="hint">电脑：WASD / 方向键移动　·　手机：手指在画面上拖动兔子（兔子在手指上方）</div>
+</div>
+
+<script>
+'use strict';
+const W = 800, H = 800;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// ---------------- 音效（Web Audio 合成，无需外部文件） ----------------
+let actx = null;
+function tone(freq, dur, type, vol, slide) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, actx.currentTime);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, actx.currentTime + dur);
+    g.gain.setValueAtTime(vol || 0.15, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + dur);
+  } catch (e) {}
+}
+const sfx = {
+  eat()      { tone(880, 0.12, 'triangle', 0.18); tone(1320, 0.1, 'triangle', 0.1); },
+  gold()     { tone(660, 0.1, 'triangle', 0.18); tone(880, 0.1, 'triangle', 0.18); tone(1320, 0.18, 'triangle', 0.16); },
+  boom()     { tone(160, 0.45, 'sawtooth', 0.25, 40); },
+  hurt()     { tone(220, 0.25, 'square', 0.15, 110); },
+  over()     { tone(440, 0.2, 'triangle', 0.18); tone(330, 0.2, 'triangle', 0.18); tone(220, 0.5, 'triangle', 0.18); },
+  start()    { tone(523, 0.12, 'triangle', 0.16); tone(784, 0.2, 'triangle', 0.16); }
+};
+
+// ---------------- 游戏状态 ----------------
+let state = 'start';           // start | playing | over
+let player, items, particles, floatTexts;
+let score, weight, lives, timeLeft, elapsed, spawnTimer;
+const keys = {};
+const MAX_WEIGHT = 100;
+const GAME_TIME = 60;
+
+function resetGame() {
+  player = { x: W / 2, y: H - 110, speed: 6, dir: 1, invincible: 0 };
+  items = []; particles = []; floatTexts = [];
+  score = 0; weight = 2; lives = 3; timeLeft = GAME_TIME;
+  elapsed = 0; spawnTimer = 0;
+}
+
+function startGame() {
+  resetGame();
+  state = 'playing';
+  sfx.start();
+}
+
+// 物品类型：普通 / 大 / 金 / 炸弹
+const TYPES = [
+  { kind: 'normal', r: 18, weight: 2,  score: 100, color: '#c98a3d' },
+  { kind: 'big',    r: 24, weight: 5,  score: 300, color: '#a9662a' },
+  { kind: 'gold',   r: 20, weight: 10, score: 1000, color: '#f6c945' },
+  { kind: 'bomb',   r: 16, weight: 0,  score: 0,    color: '#2a2a33' }
+];
+
+function spawnItem() {
+  const roll = Math.random();
+  let t;
+  if (roll < 0.58)      t = TYPES[0];
+  else if (roll < 0.74) t = TYPES[1];
+  else if (roll < 0.86) t = TYPES[2];
+  else                  t = TYPES[3];
+  const speed = 2.4 + Math.min(3.6, elapsed / 18) + Math.random() * 1.2;
+  items.push({
+    kind: t.kind, x: 40 + Math.random() * (W - 80), y: -30,
+    r: t.r, vy: speed, spin: Math.random() * Math.PI * 2, vspin: (Math.random() - 0.5) * 0.08,
+    cfg: t
+  });
+}
+
+function burst(x, y, color, n) {
+  for (let i = 0; i < (n || 14); i++) {
+    const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3;
+    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1, life: 1, color });
+  }
+}
+
+function addFloat(x, y, text, color) {
+  floatTexts.push({ x, y, text, color, life: 1 });
+}
+
+// ---------------- 输入 ----------------
+addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if ((e.key === ' ' || e.key === 'Enter') && state !== 'playing') { e.preventDefault(); startGame(); }
+  if (e.key === 'Escape') state = 'start';
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (state !== 'playing') { startGame(); }
+  movePlayerByTouch(e);
+}, { passive: false });
+canvas.addEventListener('touchmove',  e => { e.preventDefault(); movePlayerByTouch(e); }, { passive: false });
+canvas.addEventListener('mousedown', () => { if (state !== 'playing') startGame(); });
+function movePlayerByTouch(e) {
+  if (!e.touches || !e.touches.length || !player) return;
+  const rect = canvas.getBoundingClientRect();
+  // 屏幕坐标换算为游戏内部 800x800 坐标
+  const cx = (e.touches[0].clientX - rect.left) * (W / rect.width);
+  // 兔子定位在手指上方 90px，避免被手指挡住
+  const cy = (e.touches[0].clientY - rect.top) * (H / rect.height) - 90;
+  const dx = cx - player.x, dy = cy - player.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 1) {
+    const step = Math.min(dist, 16);   // 触摸跟手，速度比键盘快
+    player.x += dx / dist * step;
+    player.y += dy / dist * step;
+    player.dir = dx < 0 ? -1 : 1;
+  }
+  player.x = Math.max(40, Math.min(W - 40, player.x));
+  player.y = Math.max(120, Math.min(H - 70, player.y));
+}
+
+// ---------------- 更新 ----------------
+function update(dt) {
+  elapsed += dt;
+  timeLeft = Math.max(0, GAME_TIME - elapsed);
+
+  // 玩家移动
+  const L = keys['a'] || keys['arrowleft'], R = keys['d'] || keys['arrowright'];
+  const U = keys['w'] || keys['arrowup'],   D = keys['s'] || keys['arrowdown'];
+  if (L) { player.x -= player.speed; player.dir = -1; }
+  if (R) { player.x += player.speed; player.dir = 1; }
+  if (U) player.y -= player.speed;
+  if (D) player.y += player.speed;
+  player.x = Math.max(40, Math.min(W - 40, player.x));
+  player.y = Math.max(120, Math.min(H - 70, player.y));
+  if (player.invincible > 0) player.invincible -= dt;
+
+  // 生成物品
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) { spawnItem(); spawnTimer = Math.max(0.35, 0.85 - elapsed / 90); }
+
+  // 更新物品
+  const bodyR = playerRadius();
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    it.y += it.vy; it.spin += it.vspin;
+    if (it.y > H + 40) { items.splice(i, 1); continue; }
+
+    const dx = it.x - player.x, dy = it.y - player.y;
+    if (Math.hypot(dx, dy) < it.r + bodyR - 6) {
+      items.splice(i, 1);
+      if (it.kind === 'bomb') {
+        if (player.invincible <= 0) {
+          lives--; player.invincible = 1.5;
+          sfx.boom(); burst(it.x, it.y, '#ff5a4d', 26);
+          addFloat(it.x, it.y - 20, '-1 命', '#ff8a7a');
+          if (lives <= 0) { endGame(false); return; }
+        }
+      } else {
+        weight = Math.min(MAX_WEIGHT, weight + it.cfg.weight);
+        score += it.cfg.score;
+        if (it.kind === 'gold') { sfx.gold(); burst(it.x, it.y, '#ffd94d', 22); }
+        else { sfx.eat(); burst(it.x, it.y, it.cfg.color, 12); }
+        addFloat(it.x, it.y - 16, '+' + it.cfg.score, it.kind === 'gold' ? '#ffd94d' : '#ffe9b0');
+        if (weight >= MAX_WEIGHT) { endGame(true); return; }
+      }
+    }
+  }
+
+  // 粒子与漂浮文字
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life -= dt * 1.6;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = floatTexts.length - 1; i >= 0; i--) {
+    const f = floatTexts[i];
+    f.y -= 30 * dt; f.life -= dt * 1.1;
+    if (f.life <= 0) floatTexts.splice(i, 1);
+  }
+
+  if (timeLeft <= 0) endGame(false);
+}
+
+function playerRadius() {
+  // 体重从 2 到 100，身体半径 26 -> 44，直观表现“越吃越胖”
+  return 26 + (weight / MAX_WEIGHT) * 18;
+}
+
+function endGame(exploded) {
+  state = 'over';
+  sfx.over();
+  player._exploded = exploded;
+}
+
+// ---------------- 绘制 ----------------
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#1a2150'); g.addColorStop(0.6, '#141a3d'); g.addColorStop(1, '#0d1130');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // 星星
+  ctx.fillStyle = 'rgba(255,255,255,.7)';
+  for (let i = 0; i < 40; i++) {
+    const sx = (i * 137.5) % W, sy = (i * 89.3) % 480;
+    const tw = 0.4 + 0.6 * Math.abs(Math.sin(elapsed * 1.5 + i));
+    ctx.globalAlpha = tw * 0.8;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  // 月亮
+  const mg = ctx.createRadialGradient(W - 170, 150, 20, W - 170, 150, 90);
+  mg.addColorStop(0, '#fff3c4'); mg.addColorStop(1, '#f2cf6b');
+  ctx.fillStyle = mg;
+  ctx.beginPath(); ctx.arc(W - 170, 150, 62, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(210,170,80,.35)';
+  ctx.beginPath(); ctx.arc(W - 185, 135, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W - 150, 165, 7, 0, Math.PI * 2); ctx.fill();
+
+  // 地面
+  ctx.fillStyle = '#1c2a4a';
+  ctx.fillRect(0, H - 60, W, 60);
+  ctx.fillStyle = '#27426b';
+  ctx.fillRect(0, H - 60, W, 6);
+}
+
+function drawMooncake(it) {
+  ctx.save();
+  ctx.translate(it.x, it.y); ctx.rotate(it.spin);
+  // 饼身
+  ctx.fillStyle = it.cfg.color;
+  ctx.beginPath(); ctx.arc(0, 0, it.r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = it.kind === 'gold' ? '#b8860b' : '#7a4a16';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(0, 0, it.r - 3, 0, Math.PI * 2); ctx.stroke();
+  // 花纹
+  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-it.r + 5, 0); ctx.lineTo(it.r - 5, 0);
+  ctx.moveTo(0, -it.r + 5); ctx.lineTo(0, it.r - 5);
+  ctx.stroke();
+  if (it.kind === 'gold') {
+    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.font = 'bold ' + (it.r) + 'px serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('福', 0, 1);
+  }
+  ctx.restore();
+}
+
+function drawBomb(it) {
+  ctx.save();
+  ctx.translate(it.x, it.y);
+  ctx.fillStyle = '#22222b';
+  ctx.beginPath(); ctx.arc(0, 0, it.r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.25)';
+  ctx.beginPath(); ctx.arc(-it.r / 3, -it.r / 3, it.r / 3.2, 0, Math.PI * 2); ctx.fill();
+  // 引信
+  ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, -it.r); ctx.quadraticCurveTo(6, -it.r - 10, 12, -it.r - 8); ctx.stroke();
+  // 火花
+  const fl = 3 + Math.sin(elapsed * 20) * 2;
+  ctx.fillStyle = '#ffb347';
+  ctx.beginPath(); ctx.arc(12, -it.r - 8, fl, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawRabbit() {
+  const r = playerRadius();
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  ctx.scale(player.dir, 1);
+  if (player.invincible > 0 && Math.floor(elapsed * 12) % 2 === 0) ctx.globalAlpha = 0.4;
+
+  // 耳朵
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#d8d8e8'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(-r * 0.35, -r - 14, r * 0.22, r * 0.55, -0.15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(r * 0.25, -r - 14, r * 0.22, r * 0.55, 0.15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ffb6c6';
+  ctx.beginPath(); ctx.ellipse(-r * 0.35, -r - 12, r * 0.1, r * 0.38, -0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(r * 0.25, -r - 12, r * 0.1, r * 0.38, 0.15, 0, Math.PI * 2); ctx.fill();
+
+  // 身体（圆胖）
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#d8d8e8'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+  // 脸
+  ctx.fillStyle = '#333';
+  ctx.beginPath(); ctx.arc(-r * 0.3, -r * 0.15, r * 0.09, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(r * 0.3, -r * 0.15, r * 0.09, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ff9db3';
+  ctx.beginPath(); ctx.arc(-r * 0.45, r * 0.12, r * 0.1, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(r * 0.45, r * 0.12, r * 0.1, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ff7a9c';
+  ctx.beginPath(); ctx.moveTo(-3, r * 0.05); ctx.lineTo(3, r * 0.05); ctx.lineTo(0, r * 0.18); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawHUD() {
+  ctx.textBaseline = 'middle';
+  // 重量
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  roundRect(18, 16, 236, 62, 12); ctx.fill();
+  ctx.fillStyle = '#ffd94d';
+  ctx.font = 'bold 27px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('重量 ' + weight + ' 斤', 34, 42);
+  // 重量进度条
+  ctx.fillStyle = 'rgba(255,255,255,.2)';
+  roundRect(34, 62, 204, 9, 4); ctx.fill();
+  ctx.fillStyle = weight > 80 ? '#ff6b5e' : '#7bd88f';
+  roundRect(34, 62, 204 * Math.min(1, weight / MAX_WEIGHT), 9, 4); ctx.fill();
+
+  // 分数与命
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  roundRect(W - 250, 16, 232, 62, 12); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 25px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('分数 ' + score, W - 34, 38);
+  ctx.fillStyle = '#ff8a9c';
+  ctx.font = 'bold 23px "Microsoft YaHei", sans-serif';
+  ctx.fillText('命 ' + '\u2665'.repeat(Math.max(0, lives)), W - 34, 66);
+
+  // 倒计时
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  roundRect(W / 2 - 100, 18, 200, 52, 12); ctx.fill();
+  ctx.fillStyle = timeLeft < 10 ? '#ff6b5e' : '#fff';
+  ctx.font = 'bold 27px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(Math.ceil(timeLeft) + ' 秒', W / 2, 44);
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function overlay(title, lines) {
+  ctx.fillStyle = 'rgba(7,10,30,.72)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffe9a8';
+  ctx.font = 'bold 56px "Microsoft YaHei", sans-serif';
+  ctx.fillText(title, W / 2, H / 2 - 90);
+  ctx.fillStyle = '#dfe4ff';
+  ctx.font = '22px "Microsoft YaHei", sans-serif';
+  lines.forEach((t, i) => ctx.fillText(t, W / 2, H / 2 - 20 + i * 36));
+  ctx.fillStyle = '#ffd94d';
+  ctx.font = 'bold 26px "Microsoft YaHei", sans-serif';
+  const blink = 0.6 + 0.4 * Math.sin(elapsed * 4);
+  ctx.globalAlpha = blink;
+  ctx.fillText('点击屏幕 / 按空格 开始', W / 2, H / 2 + lines.length * 36 + 40);
+  ctx.globalAlpha = 1;
+}
+
+function render() {
+  drawBackground();
+  if (state === 'playing' || state === 'over') {
+    for (const it of items) { if (it.kind === 'bomb') drawBomb(it); else drawMooncake(it); }
+    drawRabbit();
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    }
+    ctx.globalAlpha = 1;
+    for (const f of floatTexts) {
+      ctx.globalAlpha = Math.max(0, f.life);
+      ctx.fillStyle = f.color;
+      ctx.font = 'bold 22px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(f.text, f.x, f.y);
+    }
+    ctx.globalAlpha = 1;
+    drawHUD();
+  }
+  if (state === 'start') {
+    drawRabbitAt(W / 2, H - 92, 36);
+    overlay('兔子吃月饼', [
+      '移动兔子去接天上掉下来的月饼，吃得越多越重',
+      '普通月饼 +2 斤，大月饼 +5 斤，福字金饼 +10 斤',
+      '小心黑色炸弹，碰到会丢命',
+      '体重到 100 斤会被撑爆，60 秒内尽量多得分！',
+      '电脑用 WASD/方向键，手机直接拖动屏幕'
+    ]);
+  } else if (state === 'over') {
+    overlay(player._exploded ? '撑死了！' : '游戏结束', [
+      '最终分数：' + score,
+      '最终重量：' + weight + ' 斤',
+      '点击屏幕 / 按空格 再来一局'
+    ]);
+  }
+}
+
+function drawRabbitAt(x, y, r) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(-r * 0.35, -r - 14, r * 0.22, r * 0.55, -0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(r * 0.25, -r - 14, r * 0.22, r * 0.55, 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+// ---------------- 主循环 ----------------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (state === 'playing') update(dt);
+  else elapsed += dt;
+  render();
+  requestAnimationFrame(loop);
+}
+resetGame();
+requestAnimationFrame(loop);
+</script>
+
+<!-- ===== Coze Web SDK 智能助手（粘贴在 body 区域） ===== -->
+<button id="coze-toggle" type="button">AI 助手</button>
+<div id="coze-panel">
+  <iframe id="coze-web-sdk" src="https://sdk.coze.site" allow="microphone; clipboard-write"></iframe>
+</div>
+<script>
+  const cozeWebSDK = document.getElementById("coze-web-sdk");
+  // sdk origin
+  const COZE_WEB_SDK_ORIGIN = 'https://sdk.coze.site';
+  // 重要：请把 <YOUR_TOKEN> 替换为你的真实访问令牌（个人访问令牌 PAT / OAuth / SAT），
+  // 否则助手会提示鉴权失败。projectId 已按你提供的值填好。
+  const COZE_TOKEN = 'pat_rCQBt8JOmmZMIMv2Te7YAJriRw1Y2B7R7CWjd021rKYq0KfQFi3osCAnpMVo9yJV';
+  window.addEventListener('message', (event) => {
+    // 只处理来自 sdk 的消息
+    if (event.origin !== COZE_WEB_SDK_ORIGIN) {
+      return;
+    }
+    const data = event.data;
+    // sdk 资源加载完成的通知，所有消息都必须在此后发送才有效
+    if (data.type === 'IFRAME_READY') {
+      // 必须步骤：初始化 web SDK
+      cozeWebSDK.contentWindow.postMessage({
+        type: 'INIT',
+        payload: {
+          token: COZE_TOKEN,
+          projectId: '7687051182723825673',
+          islframe:false
+        }
+      }, COZE_WEB_SDK_ORIGIN);
+    }
+    // token 过期的通知
+    if (data.type === 'TOKEN_EXPIRED') {
+      // 更新 token
+      cozeWebSDK.contentWindow.postMessage({
+        type: 'UPDATE_TOKEN',
+        payload: {
+          token: COZE_TOKEN,
+        }
+      }, COZE_WEB_SDK_ORIGIN);
+    }
+  });
+
+  // 悬浮窗的展开 / 收起
+  const cozeToggle = document.getElementById('coze-toggle');
+  const cozePanel = document.getElementById('coze-panel');
+  cozeToggle.addEventListener('click', () => {
+    const opened = cozePanel.classList.toggle('open');
+    cozeToggle.textContent = opened ? '收起助手' : 'AI 助手';
+  });
+</script>
+</body>
+</html>
